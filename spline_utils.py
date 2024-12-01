@@ -1,8 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
+from scipy.linalg import solve_banded
 
-
-#TODo em caso de erro a parte do mu e do lambda estão esquisitas, já que vai de 1 até n-2
 def open_or_closed(arr: np.array) -> bool:
     return np.array_equal(arr[0], arr[-1])
 
@@ -12,7 +11,7 @@ def vector_norm(arr):
 
     if np.array_equal(arr[0], arr[-1]):
         print("closed")
-        temp = np.linalg.norm(arr[0] - arr[-1])
+        temp = np.linalg.norm(arr[-2] - arr[0])
         h[0] = temp
         h[-1] = temp
         for i in range(1, num_points):
@@ -22,23 +21,24 @@ def vector_norm(arr):
         print("open")
         for i in range(1, num_points):
             h[i] = np.linalg.norm(arr[i] - arr[i-1])
-    
+    print("h: ", h)
     return h
 
 def calculate_gamma(h: np.array, v: np.array) -> np.array:
     if v is None:
-        v = np.zeros_like(h)
+        v = np.zeros(len(h) - 1)
 
-    gamma = np.zeros_like(h)
+    gamma = np.zeros(len(h) - 1)
 
     for i in range(len(h)-1):
         result = 2*(h[i] + h[i+1])/(v[i]*h[i]*h[i+1] + 2*(h[i] + h[i+1]))
         gamma[i] = result
 
+    print("gamma: ",gamma)
     return gamma
 
 def _calculate_lambda(h: np.array, gamma: np.array) -> np.array:
-    lambda_ = np.zeros_like(h)
+    lambda_ = np.zeros(len(h) - 1)
 
     for i in range(1, len(h) - 1):
         result = (gamma[i-1]*h[i-1] + h[i])/(gamma[i-1]*h[i-1] + h[i] + gamma[i]*h[i+1])
@@ -47,7 +47,7 @@ def _calculate_lambda(h: np.array, gamma: np.array) -> np.array:
     return lambda_
 
 def _calculate_mu(h: np.array, gamma: np.array) -> np.array:
-    mu = np.zeros_like(h)
+    mu = np.zeros(len(h) - 1)
 
     for i in range(1, len(h) - 2):
         result = gamma[i]*h[i]/(gamma[i]*h[i] + h[i+1] + gamma[i+1]*h[i+2])
@@ -57,24 +57,27 @@ def _calculate_mu(h: np.array, gamma: np.array) -> np.array:
 
 def calculate_mu(arr: np.array, h: np.array, gamma: np.array) -> np.array:
     mu = _calculate_mu(h, gamma)
-    if open_or_closed(arr):
+    if not np.array_equal(arr[0], arr[-1]): #open
         mu[0] = 0
         mu[-1] = 0
-    else:
-        mu[0] =  gamma[0]*h[0]/(gamma[0]*h[0] + h[1] + gamma[1]*h[2])
-        mu[-1] = gamma[-1]*h[-1]/(gamma[-1]*h[-1] + h[-2] + gamma[-2]*h[-3])
-    
+    else: #closed
+        mu[0] =  (gamma[0]*h[0])/(gamma[0]*h[0] + h[1] + gamma[1]*h[2])
+        mu[-1] = (gamma[-1]*h[-1])/(gamma[-1]*h[-1] + h[-2] + gamma[-2]*h[-3])
+    print("mu: ", mu)
     return mu
 
 def calculate_lambda(arr: np.array, h: np.array, gamma: np.array) -> np.array:
     lambda_ = _calculate_lambda(h, gamma)
-    if open_or_closed(arr):
+    if not np.array_equal(arr[0], arr[-1]): #open
         lambda_[0] = 1
         lambda_[-1] = 1
-    else:
+    else: #closed
         lambda_[0] = (gamma[-1]*h[-1] + h[0])/(gamma[-1]*h[-1] + h[0] + gamma[0]*h[1])
+        print("lambda conta 0 : ", (gamma[-1]*h[-1] + h[0]))
         lambda_[-1] = (gamma[-2]*h[-2] + h[-1])/(gamma[-2]*h[-2] + h[-1] + gamma[-1]*h[0])
-    
+        print("lambda conta 1 : ", (gamma[-2]*h[-2] + h[-1])/(gamma[-2]*h[-2] + h[-1] + gamma[-1]*h[0]))
+
+    print("lambda: ", lambda_)
     return np.array(lambda_)
 
 def calculate_Ri_Li(D: np.array, mu: np.array, lambda_: np.array) -> tuple:
@@ -89,7 +92,9 @@ def calculate_Ri_Li(D: np.array, mu: np.array, lambda_: np.array) -> tuple:
         
         Li = (1 - lambda_[i + 1]) * D[i] + lambda_[i + 1] * D[i + 1]
         L.append(Li)
-    
+
+    print("L: ", L)
+    print("R: ", R)
     return np.array(R), np.array(L)
 
 def casteljau(d_points: np.array, t: float) -> np.array:
@@ -106,6 +111,53 @@ def casteljau(d_points: np.array, t: float) -> np.array:
     
     return P_t
 
+def calculate_control_points(P, h, gamma, mu, lambda_):
+    n = len(P)
+    
+    matrix = np.zeros((n, n))
+
+   
+    a = np.zeros(n)
+    b = np.zeros(n)
+    c = np.zeros(n)
+
+    
+    delta = np.zeros(n)
+    for i in range(n):
+        delta[i] = h[i] / (h[i] + h[i + 1])
+
+   
+    for i in range(n):
+        a[i] = (1 - delta[i]) * (1 - lambda_[i])
+        b[i] = (1 - delta[i]) * lambda_[i] + delta[i] * (1 - mu[i])
+        c[i] = delta[i] * mu[i]
+    
+    print("a: ", a)
+    print("b: ", b)
+    print("c: ", c)
+    print("delta: ", delta)
+
+
+    for i in range(1, n):
+        matrix[i, i - 1] = a[i]  
+    matrix[0, -1] = a[0]       
+
+    for i in range(n):
+        matrix[i, i] = b[i]     
+
+    for i in range(n - 1):
+        matrix[i, i + 1] = c[i]  
+    matrix[-1, 0] = c[-1]      
+
+    np.savetxt('matrix.txt', matrix, fmt='%0.5f')
+
+    try:
+        D = np.linalg.solve(matrix, P)
+    except np.linalg.LinAlgError as e:
+        raise ValueError("The matrix is singular and cannot be solved. Check your coefficients or input data.") from e
+
+    return D
+
 def plot_spline(P: np.array, V:np.array = None, num_points: int=100):
 
     h = vector_norm(P)
@@ -114,7 +166,9 @@ def plot_spline(P: np.array, V:np.array = None, num_points: int=100):
     mu = calculate_mu(P, h, gamma)
     lambda_ = calculate_lambda(P, h, gamma)
 
-    R, L = calculate_Ri_Li(P, mu, lambda_)
+    D = calculate_control_points(P, h, gamma, mu, lambda_)
+
+    R, L = calculate_Ri_Li(D, mu, lambda_)
 
     plt.figure(figsize=(10, 6))
     
