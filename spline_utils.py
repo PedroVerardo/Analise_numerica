@@ -2,10 +2,19 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.linalg import solve_banded
 
+
 def open_or_closed(arr: np.array) -> bool:
     return np.array_equal(arr[0], arr[-1])
 
-def vector_norm(arr):
+def uniform_spacing(arr: np.array) -> np.array:
+    num_points = len(arr)
+    h_tam = num_points + 1
+    h = np.zeros(h_tam)
+    for i in range(0, h_tam):
+        h[i] = 1
+    return h
+
+def not_uniform_spacing(arr):
     num_points = len(arr)
     h = np.zeros(num_points + 1)
 
@@ -84,7 +93,7 @@ def calculate_Ri_Li(D: np.array, mu: np.array, lambda_: np.array) -> tuple:
     R = []
     L = []
     
-    for i in range(len(D) - 1):
+    for i in range(len(D)-1):
         
         Ri = (1 - mu[i]) * D[i] + mu[i] * D[i + 1]
         R.append(Ri)
@@ -137,7 +146,7 @@ def calculate_control_points(P, h, gamma, mu, lambda_):
     print("c: ", c)
     print("delta: ", delta)
 
-
+    # Can be improved 
     for i in range(1, n):
         matrix[i, i - 1] = a[i]  
     matrix[0, -1] = a[0]       
@@ -147,9 +156,10 @@ def calculate_control_points(P, h, gamma, mu, lambda_):
 
     for i in range(n - 1):
         matrix[i, i + 1] = c[i]  
-    matrix[-1, 0] = c[-1]      
+    matrix[-1, 0] = c[-1]
 
-    np.savetxt('matrix.txt', matrix, fmt='%0.5f')
+    #save matrix to test
+    #np.savetxt('matrix.txt', matrix, fmt='%0.5f')
 
     try:
         D = np.linalg.solve(matrix, P)
@@ -158,9 +168,12 @@ def calculate_control_points(P, h, gamma, mu, lambda_):
 
     return D
 
-def plot_spline(P: np.array, V:np.array = None, num_points: int=100):
+def plot_spline(P: np.array, V:np.array = None, num_points: int=100, uniform: bool=False):
 
-    h = vector_norm(P)
+    if uniform:
+        h = uniform_spacing(P)
+    else:
+        h = not_uniform_spacing(P)
     
     gamma = calculate_gamma(h, V)
     mu = calculate_mu(P, h, gamma)
